@@ -1,257 +1,399 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-T">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Cronograma de Estudos (Diário)</title>
+    <title>Dashboard de Estudos com IA</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Custom styles inspired by shadcn/ui */
+        :root {
+            --background: #09090B;
+            --card: #18181B;
+            --card-border: #27272A;
+            --text-primary: #FAFAFA;
+            --text-secondary: #A1A1AA;
+            --accent: #9333ea; /* purple-600 */
+        }
+        html { scroll-behavior: smooth; }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #09090b; /* zinc-950 */
-            color: #fafafa; /* zinc-50 */
+            background-color: var(--background);
+            color: var(--text-primary);
+            overflow-x: hidden;
         }
         .card {
-            background-color: #18181b; /* zinc-900 */
-            border: 1px solid #27272a; /* zinc-800 */
+            background-color: var(--card);
+            border: 1px solid var(--card-border);
             border-radius: 0.75rem;
             padding: 1.5rem;
-            transition: all 0.2s ease-in-out;
+            transition: border-color 0.2s ease-in-out;
         }
-        .card:hover {
-            border-color: #a1a1aa; /* zinc-400 */
+        .task-list-item {
+            transition: background-color 0.2s ease-in-out;
+            border-left: 4px solid transparent;
         }
-        .task-completed {
+        .task-list-item.current-task {
+            background-color: rgba(147, 51, 234, 0.1);
+            border-left-color: var(--accent);
+        }
+        .task-completed p {
             text-decoration: line-through;
-            color: #71717a; /* zinc-500 */
+            color: var(--text-secondary);
         }
         .progress-bar-container {
-            background-color: #27272a; /* zinc-800 */
+            background-color: var(--card-border);
             border-radius: 0.5rem;
             overflow: hidden;
-            height: 1.25rem;
+            height: 1rem;
         }
         .progress-bar {
-            background-color: #22c55e; /* green-500 */
+            background: linear-gradient(90deg, #a855f7, #d946ef);
             height: 100%;
             transition: width 0.5s ease-in-out;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            line-height: 1rem;
-            font-weight: 600;
-            color: #ffffff;
         }
-        /* Hide checkbox but keep it accessible */
-        .custom-checkbox {
-            position: absolute;
-            opacity: 0;
-            cursor: pointer;
-            height: 0;
-            width: 0;
-        }
-        /* Custom checkbox visual */
+        .custom-checkbox { position: absolute; opacity: 0; }
         .checkbox-visual {
-            flex-shrink: 0;
-            margin-top: 2px;
-            width: 1.25rem;
-            height: 1.25rem;
-            border-radius: 0.25rem;
-            border: 2px solid #71717a; /* zinc-500 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s, border-color 0.2s;
+            flex-shrink: 0; margin-top: 2px; width: 1.25rem; height: 1.25rem;
+            border-radius: 0.25rem; border: 2px solid var(--text-secondary);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background-color 0.2s, border-color 0.2s;
         }
-        .custom-checkbox:checked + .checkbox-visual {
-            background-color: #22c55e; /* green-500 */
-            border-color: #22c55e; /* green-500 */
+        .custom-checkbox:checked + .checkbox-visual { background-color: var(--accent); border-color: var(--accent); }
+        .check-icon { opacity: 0; transition: opacity 0.2s ease-in-out; }
+        .custom-checkbox:checked + .checkbox-visual .check-icon { opacity: 1; }
+        .modal-overlay {
+            position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+            z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
-        .custom-checkbox:checked + .checkbox-visual .check-icon {
-            display: block;
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .modal-content { transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        .spinner {
+            width: 1rem; height: 1rem; border-radius: 50%;
+            border: 2px solid #ffffff30; border-top-color: #fff;
+            animation: spin 1s linear infinite;
         }
-        .check-icon {
-            display: none;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="p-4 sm:p-6 md:p-8">
-    <div class="max-w-4xl mx-auto">
-        <!-- Header -->
-        <header class="mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">Meu Cronograma de Estudos</h1>
-            <p id="subHeader" class="text-zinc-400 mt-2">Seu plano de estudos para hoje.</p>
+
+    <!-- Modal de Confirmação Reset -->
+    <div id="resetModal" class="modal-overlay">
+        <div class="modal-content card max-w-sm w-full">
+             <h3 class="text-lg font-bold flex items-center"><i data-lucide="alert-triangle" class="text-yellow-400 mr-2"></i>Confirmar Ação</h3>
+             <p class="text-zinc-400 my-4">Você tem certeza que deseja reiniciar o progresso de hoje? Esta ação não pode ser desfeita.</p>
+             <div class="flex justify-end gap-4 mt-6">
+                <button id="cancelReset" class="px-4 py-2 rounded-md font-semibold bg-zinc-800 hover:bg-zinc-700 transition-colors">Cancelar</button>
+                <button id="confirmReset" class="px-4 py-2 rounded-md font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors">Confirmar</button>
+             </div>
+        </div>
+    </div>
+    
+    <!-- Modal "Me ensine algo novo" -->
+    <div id="factModal" class="modal-overlay">
+        <div class="modal-content card max-w-md w-full">
+             <div class="flex justify-between items-center mb-4">
+                 <h3 class="text-lg font-bold flex items-center"><i data-lucide="brain-circuit" class="text-blue-400 mr-2"></i>Fato do Dia</h3>
+                 <button id="closeFactModal" class="p-1 rounded-full hover:bg-zinc-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+             </div>
+             <div id="factContent" class="text-zinc-300 my-4 min-h-[6rem]">
+                <!-- Conteúdo do fato gerado aqui -->
+             </div>
+             <div id="factCategory" class="mt-4"></div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-10">
+            <h1 id="welcomeMessage" class="text-4xl md:text-5xl font-extrabold tracking-tight">Bom dia!</h1>
+            <p class="text-zinc-400 mt-2 text-lg">Pronto para mais um dia produtivo? Vamos começar.</p>
         </header>
 
-        <!-- Progress Section -->
-        <div class="mb-8 p-6 card">
-            <h2 id="progressTitle" class="text-xl font-semibold mb-4 text-zinc-100">Progresso do Dia</h2>
-            <div class="progress-bar-container">
-                <div id="progressBar" class="progress-bar" style="width: 0%;"></div>
+        <main id="appContainer" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div id="scheduleColumn" class="lg:col-span-2">
+                <div class="card h-full">
+                    <div id="scheduleHeader" class="flex items-center mb-6">
+                        <i data-lucide="calendar-check" class="w-7 h-7 text-purple-400 mr-3"></i>
+                        <h2 class="text-2xl font-bold">Tarefas de Hoje</h2>
+                    </div>
+                    <ul id="scheduleList" class="space-y-3"></ul>
+                </div>
             </div>
-        </div>
 
-        <!-- Schedule Container -->
-        <main id="scheduleContainer">
-            <!-- Schedule for the current day will be inserted here -->
+            <aside id="widgetsColumn" class="space-y-8">
+                <div class="card">
+                    <h3 class="text-xl font-bold mb-4 flex items-center"><i data-lucide="pie-chart" class="w-5 h-5 mr-2 text-green-400"></i>Progresso do Dia</h3>
+                    <div class="progress-bar-container mb-2"><div id="progressBar" class="progress-bar"></div></div>
+                    <p id="progressText" class="text-sm text-zinc-400 text-center">0 de 8 tarefas concluídas</p>
+                </div>
+                <div class="card">
+                     <h3 class="text-xl font-bold mb-4 flex items-center"><i data-lucide="lightbulb" class="w-5 h-5 mr-2 text-yellow-400"></i>Me ensine algo novo</h3>
+                     <p class="text-sm text-zinc-400 mb-4">Clique no botão para descobrir um fato novo e interessante gerado por IA.</p>
+                     <button id="getFactButton" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold bg-purple-600 hover:bg-purple-700 text-white transition-all">
+                        Descobrir ✨
+                     </button>
+                </div>
+                <div class="card">
+                     <h3 class="text-xl font-bold mb-4 flex items-center"><i data-lucide="quote" class="w-5 h-5 mr-2 text-blue-400"></i>Foco e Disciplina</h3>
+                     <div id="quoteContainer" class="min-h-[4rem]">
+                        <p id="quoteText" class="text-zinc-300 italic">Carregando citação...</p>
+                        <p id="quoteAuthor" class="text-right text-zinc-400 text-sm mt-2"></p>
+                    </div>
+                </div>
+                <div class="card">
+                     <h3 class="text-xl font-bold mb-4 flex items-center"><i data-lucide="settings-2" class="w-5 h-5 mr-2 text-zinc-400"></i>Ações</h3>
+                     <button id="resetDayButton" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold bg-zinc-800 hover:bg-red-600/20 hover:text-red-400 hover:border-red-600 border border-transparent transition-all">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>Reiniciar Progresso
+                     </button>
+                </div>
+            </aside>
         </main>
-
-        <!-- Footer -->
-        <footer class="text-center mt-12 text-zinc-500">
-            <p>Desenvolvido com JavaScript Puro, Tailwind CSS & shadcn/ui.</p>
-        </footer>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const scheduleContainer = document.getElementById('scheduleContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressTitle = document.getElementById('progressTitle');
-            const subHeader = document.getElementById('subHeader');
+    document.addEventListener('DOMContentLoaded', () => {
+        // Pega a chave da API a partir dos parâmetros da URL (ex: ?apiKey=SUA_CHAVE_AQUI)
+        const urlParams = new URLSearchParams(window.location.search);
+        const geminiApiKey = urlParams.get('apiKey') || "";
 
-            // Defines the schedule structure for the week
-            const schedule = [
-                { day: 'Segunda-feira', focus: 'B7Web' },
-                { day: 'Terça-feira', focus: 'Python' },
-                { day: 'Quarta-feira', focus: 'B7Web' },
-                { day: 'Quinta-feira', focus: 'Python' },
-                { day: 'Sexta-feira', focus: 'B7Web' },
-                { day: 'Sábado', focus: 'Python' }
-            ];
+        // --- DOM Elements ---
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const scheduleList = document.getElementById('scheduleList');
+        const scheduleHeader = document.getElementById('scheduleHeader');
+        const appContainer = document.getElementById('appContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const quoteText = document.getElementById('quoteText');
+        const quoteAuthor = document.getElementById('quoteAuthor');
+        const resetDayButton = document.getElementById('resetDayButton');
+        const resetModal = document.getElementById('resetModal');
+        const confirmReset = document.getElementById('confirmReset');
+        const cancelReset = document.getElementById('cancelReset');
+        const getFactButton = document.getElementById('getFactButton');
+        const factModal = document.getElementById('factModal');
+        const factContent = document.getElementById('factContent');
+        const factCategory = document.getElementById('factCategory');
+        const closeFactModal = document.getElementById('closeFactModal');
+        
+        // --- App Config ---
+        const scheduleConfig = [ { day: 'Segunda-feira', focus: 'B7Web' }, { day: 'Terça-feira', focus: 'Python' }, { day: 'Quarta-feira', focus: 'B7Web' }, { day: 'Quinta-feira', focus: 'Python' }, { day: 'Sexta-feira', focus: 'B7Web' }, { day: 'Sábado', focus: 'Python' }];
+        const activitiesConfig = [ { time: '15:00 - 16:15', title: 'Foco Principal (Curso FIAP)', desc: 'Aprofundar nos conteúdos da FIAP.' }, { time: '16:15 - 16:45', title: 'Intervalo', desc: 'Alongue-se, beba água, coma um lanche.' }, { time: '16:45 - 18:00', title: 'Tecnologia/Programação', desc: 'Alternar entre os cursos.' }, { time: '18:00 - 18:30', title: 'Jantar/Descanso', desc: 'Recarregar as energias.' }, { time: '18:30 - 19:45', title: 'Inglês', desc: 'Prática do idioma.' }, { time: '19:45 - 20:00', title: 'Intervalo', desc: 'Pequeno descanso para a mente.' }, { time: '20:00 - 21:15', title: 'Revisão/Prática', desc: 'Revisar conteúdo e fazer exercícios.' }, { time: '21:15 - 22:00', title: 'Organização', desc: 'Organizar material para o dia seguinte.' }];
+        const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        
+        const today = new Date();
+        const currentDayName = dayNames[today.getDay()];
+        const todaySchedule = scheduleConfig.find(s => s.day === currentDayName);
+        let state = {};
 
-            // Defines the list of daily activities
-            const activities = [
-                { time: '15:00 - 16:15', title: 'Foco Principal (Curso FIAP)', description: 'Aprofundar nos conteúdos da FIAP.' },
-                { time: '16:15 - 16:45', title: 'Intervalo', description: 'Alongue-se, beba água, coma um lanche leve.' },
-                { time: '16:45 - 18:00', title: 'Tecnologia/Programação', description: 'Alternar entre os cursos B7Web e Python.' },
-                { time: '18:00 - 18:30', title: 'Intervalo para Jantar/Descanso', description: 'Recarregar as energias.' },
-                { time: '18:30 - 19:45', title: 'Inglês', description: 'Prática do idioma: leitura, escuta ou conversação.' },
-                { time: '19:45 - 20:00', title: 'Intervalo', description: 'Pequeno descanso para a mente.' },
-                { time: '20:00 - 21:15', title: 'Revisão/Prática/Aprofundamento', description: 'Revisar conteúdo, fazer exercícios ou projetos.' },
-                { time: '21:15 - 22:00', title: 'Organização/Leitura Leve', description: 'Organizar material ou fazer uma leitura relaxante.' }
-            ];
+        // --- GEMINI API FUNCTIONS ---
+        async function callGemini(prompt, jsonSchema = null) {
+            if (!geminiApiKey) {
+                console.error("API Key do Gemini não encontrada. Passe a chave via parâmetro de URL (?apiKey=SUA_CHAVE).");
+                return null;
+            }
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
 
-            const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-            const today = new Date();
-            const currentDayName = dayNames[today.getDay()];
-            const todaySchedule = schedule.find(s => s.day === currentDayName);
-
-            let totalTasks = 0;
-            let completedTasks = 0;
-
-            const updateProgressBar = () => {
-                const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-                progressBar.style.width = `${percentage}%`;
-                progressBar.textContent = percentage > 0 ? `${percentage}%` : '';
-            };
-
-            const recalculateCompletedTasks = (state) => {
-                let count = 0;
-                if (todaySchedule) {
-                    activities.forEach((_, index) => {
-                        const taskId = `${todaySchedule.day.replace(/\s+/g, '-')}-${index}`;
-                        if (state[taskId]) {
-                            count++;
-                        }
-                    });
-                }
-                completedTasks = count;
-            };
-
-            const loadState = () => {
-                const state = JSON.parse(localStorage.getItem('studyScheduleState_v1')) || {};
-                recalculateCompletedTasks(state);
-                return state;
-            };
-
-            const saveState = (state) => {
-                localStorage.setItem('studyScheduleState_v1', JSON.stringify(state));
-                recalculateCompletedTasks(state);
-                updateProgressBar();
-            };
-
-            const savedState = loadState();
-
-            if (todaySchedule) {
-                totalTasks = activities.length;
-                subHeader.textContent = `Seu plano de estudos para hoje, ${currentDayName}.`;
-
-                const dayCard = document.createElement('div');
-                dayCard.className = 'card';
-
-                let activitiesHtml = '';
-                activities.forEach((activity, index) => {
-                    const taskId = `${todaySchedule.day.replace(/\s+/g, '-')}-${index}`;
-                    const isCompleted = savedState[taskId] || false;
-
-                    let activityTitle = activity.title;
-                    if (activity.title === 'Tecnologia/Programação') {
-                        activityTitle = `Tecnologia: ${todaySchedule.focus}`;
-                    }
-
-                    activitiesHtml += `
-                        <li class="flex items-start mb-4">
-                            <label for="${taskId}" class="flex items-start cursor-pointer w-full">
-                                <input type="checkbox" id="${taskId}" class="custom-checkbox" ${isCompleted ? 'checked' : ''}>
-                                <div class="checkbox-visual">
-                                    <i data-lucide="check" class="check-icon w-4 h-4 text-white"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <p class="font-semibold ${isCompleted ? 'task-completed' : 'text-zinc-100'}">${activity.time} - ${activityTitle}</p>
-                                    <p class="text-sm ${isCompleted ? 'task-completed' : 'text-zinc-400'}">${activity.description}</p>
-                                </div>
-                            </label>
-                        </li>
-                    `;
-                });
-
-                dayCard.innerHTML = `
-                    <div class="flex items-center mb-6">
-                        <i data-lucide="calendar-days" class="w-6 h-6 text-purple-400 mr-3"></i>
-                        <h3 class="text-2xl font-bold text-zinc-100">${todaySchedule.day}</h3>
-                    </div>
-                    <ul class="space-y-2">${activitiesHtml}</ul>
-                `;
-
-                scheduleContainer.appendChild(dayCard);
-
-                dayCard.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const taskId = e.target.id;
-                        savedState[taskId] = e.target.checked;
-                        saveState(savedState);
-
-                        const label = e.target.closest('label');
-                        const texts = label.querySelectorAll('p');
-                        texts.forEach(p => {
-                            p.classList.toggle('task-completed', e.target.checked);
-                        });
-                    }
-                });
-
-            } else {
-                // Handle Sunday or other non-study days
-                subHeader.textContent = `Hoje é ${currentDayName}. Dia de descansar!`;
-                progressTitle.textContent = "Progresso do Dia: Descanso";
-                scheduleContainer.innerHTML = `
-                    <div class="card text-center py-10">
-                         <i data-lucide="coffee" class="w-16 h-16 text-purple-400 mx-auto mb-4"></i>
-                        <h3 class="text-2xl font-bold text-zinc-100">Hoje é dia de descanso!</h3>
-                        <p class="text-zinc-400 mt-2">Aproveite para recarregar as energias para a próxima semana.</p>
-                    </div>
-                `;
+            if (jsonSchema) {
+                payload.generationConfig = {
+                    responseMimeType: "application/json",
+                    responseSchema: jsonSchema
+                };
             }
 
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                     throw new Error("Resposta da API inválida.");
+                }
+            } catch (error) {
+                console.error("Erro ao chamar a API Gemini:", error);
+                return null;
+            }
+        }
+
+        async function generateMotivationalQuote() {
+            quoteText.textContent = 'Carregando citação...';
+            quoteAuthor.textContent = '';
+
+            const prompt = "Gere uma citação curta e impactante de um filósofo famoso (ex: Sócrates, Platão, Aristóteles, Nietzsche, Sêneca). Forneça a citação e o nome do autor.";
+            const schema = { type: "OBJECT", properties: { quote: { type: "STRING" }, author: { type: "STRING" } }, required: ["quote", "author"] };
+            
+            const resultText = await callGemini(prompt, schema);
+            
+            if (resultText) {
+                try {
+                    const parsedResult = JSON.parse(resultText);
+                    quoteText.textContent = `"${parsedResult.quote}"`;
+                    quoteAuthor.textContent = `— ${parsedResult.author}`;
+                } catch(e) {
+                    quoteText.textContent = '"A vida não examinada não vale a pena ser vivida."';
+                    quoteAuthor.textContent = '— Sócrates';
+                }
+            } else {
+                quoteText.textContent = '"A vida não examinada não vale a pena ser vivida."';
+                quoteAuthor.textContent = '— Sócrates';
+            }
+        }
+        
+        async function getNewFact() {
+            getFactButton.disabled = true;
+            getFactButton.innerHTML = '<div class="spinner"></div>';
+            factModal.classList.add('visible');
+            factContent.innerHTML = '<div class="flex justify-center items-center h-full"><div class="spinner"></div></div>';
+            factCategory.innerHTML = '';
+            
+            const prompt = `Aja como um professor universal. Gere um fato interessante, pouco conhecido e surpreendente sobre um tópico aleatório que possa ser de uma das seguintes categorias: Tecnologia, Ciência, Filosofia, Arte, História. Forneça o fato e a categoria correspondente.`;
+            const schema = { type: "OBJECT", properties: { fact: { type: "STRING" }, category: { type: "STRING" } }, required: ["fact", "category"] };
+            
+            const resultText = await callGemini(prompt, schema);
+            
+            if (resultText) {
+                try {
+                    const parsedResult = JSON.parse(resultText);
+                    factContent.textContent = parsedResult.fact;
+                    const categoryColors = {
+                        "Tecnologia": "bg-blue-500/20 text-blue-300",
+                        "Ciência": "bg-green-500/20 text-green-300",
+                        "Filosofia": "bg-yellow-500/20 text-yellow-300",
+                        "Arte": "bg-pink-500/20 text-pink-300",
+                        "História": "bg-orange-500/20 text-orange-300",
+                    };
+                    const color = categoryColors[parsedResult.category] || "bg-zinc-500/20 text-zinc-300";
+                    factCategory.innerHTML = `<span class="px-2 py-1 text-xs font-semibold rounded-full ${color}">${parsedResult.category}</span>`;
+                } catch(e) {
+                    factContent.textContent = "Ocorreu um erro ao processar a resposta da IA.";
+                }
+            } else {
+                factContent.textContent = "Não foi possível gerar um fato. Por favor, tente novamente.";
+            }
+
+            getFactButton.disabled = false;
+            getFactButton.innerHTML = 'Descobrir ✨';
+        }
+
+        // --- CORE APP FUNCTIONS ---
+        function renderSchedule() {
+            scheduleList.innerHTML = '';
+            const now = new Date();
+            let currentTaskFound = false;
+
+            activitiesConfig.forEach((activity, index) => {
+                const taskId = `${currentDayName.replace(/\s+/g, '-')}-${index}`;
+                const isCompleted = state[taskId] || false;
+                
+                const [startTimeStr] = activity.time.split(' - ');
+                const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+                const [endTimeStr] = activity.time.split(' - ').slice(-1);
+                const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+
+                const taskStartTime = new Date(now); taskStartTime.setHours(startHour, startMinute, 0, 0);
+                const taskEndTime = new Date(now); taskEndTime.setHours(endHour, endMinute, 0, 0);
+
+                let isCurrent = !currentTaskFound && (now >= taskStartTime && now < taskEndTime);
+                if(isCurrent) currentTaskFound = true;
+                
+                const li = document.createElement('li');
+                li.className = `task-list-item p-3 rounded-lg flex items-start gap-4 ${isCurrent ? 'current-task' : ''} ${isCompleted ? 'task-completed' : ''}`;
+                
+                let activityTitle = activity.title === 'Tecnologia/Programação' ? `Tecnologia: ${todaySchedule.focus}` : activity.title;
+
+                li.innerHTML = `
+                    <label for="${taskId}" class="flex items-start cursor-pointer">
+                        <input type="checkbox" id="${taskId}" class="custom-checkbox" ${isCompleted ? 'checked' : ''}>
+                        <div class="checkbox-visual">
+                            <i data-lucide="check" class="check-icon w-4 h-4 text-white"></i>
+                        </div>
+                    </label>
+                    <div class="flex-1">
+                        <p class="font-bold text-zinc-100">${activityTitle}</p>
+                        <p class="text-sm text-zinc-400">${activity.desc}</p>
+                        <p class="text-xs font-mono mt-1 text-purple-400">${activity.time}</p>
+                    </div>
+                `;
+                scheduleList.appendChild(li);
+            });
+            scheduleHeader.querySelector('h2').textContent = `Tarefas de ${currentDayName}`;
+        }
+        
+        function updateProgress() {
+            if (!todaySchedule) return;
+            const totalTasks = activitiesConfig.length;
+            const completedTasks = Object.keys(state).filter(key => key.startsWith(currentDayName) && state[key]).length;
+            const percentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = `${completedTasks} de ${totalTasks} tarefas concluídas`;
+        }
+
+        function renderDayOff() {
+             appContainer.innerHTML = `<div class="lg:col-span-3 card text-center py-16"><i data-lucide="coffee" class="w-16 h-16 text-purple-400 mx-auto mb-6"></i><h2 class="text-3xl font-bold text-zinc-100">Hoje é dia de descanso!</h2><p class="text-zinc-400 mt-2 text-lg">Aproveite para recarregar as energias.</p></div>`;
+        }
+        
+        function saveState() { localStorage.setItem('studySchedule_v2', JSON.stringify(state)); }
+        function loadState() { return JSON.parse(localStorage.getItem('studySchedule_v2')) || {}; }
+        
+        function resetDayProgress() {
+            Object.keys(state).forEach(key => { if (key.startsWith(currentDayName)) delete state[key]; });
+            saveState();
+            render();
+        }
+        
+        function setupEventListeners() {
+            scheduleList.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const li = e.target.closest('.task-list-item');
+                    li.classList.toggle('task-completed', e.target.checked);
+                    state[e.target.id] = e.target.checked;
+                    saveState();
+                    updateProgress();
+                }
+            });
+
+            resetDayButton.addEventListener('click', () => resetModal.classList.add('visible'));
+            cancelReset.addEventListener('click', () => resetModal.classList.remove('visible'));
+            confirmReset.addEventListener('click', () => { resetDayProgress(); resetModal.classList.remove('visible'); });
+            
+            getFactButton.addEventListener('click', getNewFact);
+            closeFactModal.addEventListener('click', () => factModal.classList.remove('visible'));
+        }
+
+        function initializeApp() {
+            const hour = new Date().getHours();
+            if (hour < 12) welcomeMessage.textContent = 'Bom dia!';
+            else if (hour < 18) welcomeMessage.textContent = 'Boa tarde!';
+            else welcomeMessage.textContent = 'Boa noite!';
+            
+            generateMotivationalQuote();
+            state = loadState();
+            
+            if (todaySchedule) {
+                renderSchedule();
+                updateProgress();
+                setupEventListeners();
+            } else {
+                renderDayOff();
+            }
             lucide.createIcons();
-            updateProgressBar();
-        });
+        }
+
+        initializeApp();
+    });
     </script>
 </body>
 </html>
