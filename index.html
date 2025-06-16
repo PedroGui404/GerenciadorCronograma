@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Cronograma de Estudos (Diário)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom styles inspired by shadcn/ui */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b; /* zinc-950 */
+            color: #fafafa; /* zinc-50 */
+        }
+        .card {
+            background-color: #18181b; /* zinc-900 */
+            border: 1px solid #27272a; /* zinc-800 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            transition: all 0.2s ease-in-out;
+        }
+        .card:hover {
+            border-color: #a1a1aa; /* zinc-400 */
+        }
+        .task-completed {
+            text-decoration: line-through;
+            color: #71717a; /* zinc-500 */
+        }
+        .progress-bar-container {
+            background-color: #27272a; /* zinc-800 */
+            border-radius: 0.5rem;
+            overflow: hidden;
+            height: 1.25rem;
+        }
+        .progress-bar {
+            background-color: #22c55e; /* green-500 */
+            height: 100%;
+            transition: width 0.5s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            line-height: 1rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        /* Hide checkbox but keep it accessible */
+        .custom-checkbox {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+        /* Custom checkbox visual */
+        .checkbox-visual {
+            flex-shrink: 0;
+            margin-top: 2px;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 0.25rem;
+            border: 2px solid #71717a; /* zinc-500 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .custom-checkbox:checked + .checkbox-visual {
+            background-color: #22c55e; /* green-500 */
+            border-color: #22c55e; /* green-500 */
+        }
+        .custom-checkbox:checked + .checkbox-visual .check-icon {
+            display: block;
+        }
+        .check-icon {
+            display: none;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">Meu Cronograma de Estudos</h1>
+            <p id="subHeader" class="text-zinc-400 mt-2">Seu plano de estudos para hoje.</p>
+        </header>
+
+        <!-- Progress Section -->
+        <div class="mb-8 p-6 card">
+            <h2 id="progressTitle" class="text-xl font-semibold mb-4 text-zinc-100">Progresso do Dia</h2>
+            <div class="progress-bar-container">
+                <div id="progressBar" class="progress-bar" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- Schedule Container -->
+        <main id="scheduleContainer">
+            <!-- Schedule for the current day will be inserted here -->
+        </main>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-zinc-500">
+            <p>Desenvolvido com JavaScript Puro, Tailwind CSS & shadcn/ui.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const scheduleContainer = document.getElementById('scheduleContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressTitle = document.getElementById('progressTitle');
+            const subHeader = document.getElementById('subHeader');
+
+            // Defines the schedule structure for the week
+            const schedule = [
+                { day: 'Segunda-feira', focus: 'B7Web' },
+                { day: 'Terça-feira', focus: 'Python' },
+                { day: 'Quarta-feira', focus: 'B7Web' },
+                { day: 'Quinta-feira', focus: 'Python' },
+                { day: 'Sexta-feira', focus: 'B7Web' },
+                { day: 'Sábado', focus: 'Python' }
+            ];
+
+            // Defines the list of daily activities
+            const activities = [
+                { time: '15:00 - 16:15', title: 'Foco Principal (Curso FIAP)', description: 'Aprofundar nos conteúdos da FIAP.' },
+                { time: '16:15 - 16:45', title: 'Intervalo', description: 'Alongue-se, beba água, coma um lanche leve.' },
+                { time: '16:45 - 18:00', title: 'Tecnologia/Programação', description: 'Alternar entre os cursos B7Web e Python.' },
+                { time: '18:00 - 18:30', title: 'Intervalo para Jantar/Descanso', description: 'Recarregar as energias.' },
+                { time: '18:30 - 19:45', title: 'Inglês', description: 'Prática do idioma: leitura, escuta ou conversação.' },
+                { time: '19:45 - 20:00', title: 'Intervalo', description: 'Pequeno descanso para a mente.' },
+                { time: '20:00 - 21:15', title: 'Revisão/Prática/Aprofundamento', description: 'Revisar conteúdo, fazer exercícios ou projetos.' },
+                { time: '21:15 - 22:00', title: 'Organização/Leitura Leve', description: 'Organizar material ou fazer uma leitura relaxante.' }
+            ];
+
+            const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+            const today = new Date();
+            const currentDayName = dayNames[today.getDay()];
+            const todaySchedule = schedule.find(s => s.day === currentDayName);
+
+            let totalTasks = 0;
+            let completedTasks = 0;
+
+            const updateProgressBar = () => {
+                const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+                progressBar.style.width = `${percentage}%`;
+                progressBar.textContent = percentage > 0 ? `${percentage}%` : '';
+            };
+
+            const recalculateCompletedTasks = (state) => {
+                let count = 0;
+                if (todaySchedule) {
+                    activities.forEach((_, index) => {
+                        const taskId = `${todaySchedule.day.replace(/\s+/g, '-')}-${index}`;
+                        if (state[taskId]) {
+                            count++;
+                        }
+                    });
+                }
+                completedTasks = count;
+            };
+
+            const loadState = () => {
+                const state = JSON.parse(localStorage.getItem('studyScheduleState_v1')) || {};
+                recalculateCompletedTasks(state);
+                return state;
+            };
+
+            const saveState = (state) => {
+                localStorage.setItem('studyScheduleState_v1', JSON.stringify(state));
+                recalculateCompletedTasks(state);
+                updateProgressBar();
+            };
+
+            const savedState = loadState();
+
+            if (todaySchedule) {
+                totalTasks = activities.length;
+                subHeader.textContent = `Seu plano de estudos para hoje, ${currentDayName}.`;
+
+                const dayCard = document.createElement('div');
+                dayCard.className = 'card';
+
+                let activitiesHtml = '';
+                activities.forEach((activity, index) => {
+                    const taskId = `${todaySchedule.day.replace(/\s+/g, '-')}-${index}`;
+                    const isCompleted = savedState[taskId] || false;
+
+                    let activityTitle = activity.title;
+                    if (activity.title === 'Tecnologia/Programação') {
+                        activityTitle = `Tecnologia: ${todaySchedule.focus}`;
+                    }
+
+                    activitiesHtml += `
+                        <li class="flex items-start mb-4">
+                            <label for="${taskId}" class="flex items-start cursor-pointer w-full">
+                                <input type="checkbox" id="${taskId}" class="custom-checkbox" ${isCompleted ? 'checked' : ''}>
+                                <div class="checkbox-visual">
+                                    <i data-lucide="check" class="check-icon w-4 h-4 text-white"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="font-semibold ${isCompleted ? 'task-completed' : 'text-zinc-100'}">${activity.time} - ${activityTitle}</p>
+                                    <p class="text-sm ${isCompleted ? 'task-completed' : 'text-zinc-400'}">${activity.description}</p>
+                                </div>
+                            </label>
+                        </li>
+                    `;
+                });
+
+                dayCard.innerHTML = `
+                    <div class="flex items-center mb-6">
+                        <i data-lucide="calendar-days" class="w-6 h-6 text-purple-400 mr-3"></i>
+                        <h3 class="text-2xl font-bold text-zinc-100">${todaySchedule.day}</h3>
+                    </div>
+                    <ul class="space-y-2">${activitiesHtml}</ul>
+                `;
+
+                scheduleContainer.appendChild(dayCard);
+
+                dayCard.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const taskId = e.target.id;
+                        savedState[taskId] = e.target.checked;
+                        saveState(savedState);
+
+                        const label = e.target.closest('label');
+                        const texts = label.querySelectorAll('p');
+                        texts.forEach(p => {
+                            p.classList.toggle('task-completed', e.target.checked);
+                        });
+                    }
+                });
+
+            } else {
+                // Handle Sunday or other non-study days
+                subHeader.textContent = `Hoje é ${currentDayName}. Dia de descansar!`;
+                progressTitle.textContent = "Progresso do Dia: Descanso";
+                scheduleContainer.innerHTML = `
+                    <div class="card text-center py-10">
+                         <i data-lucide="coffee" class="w-16 h-16 text-purple-400 mx-auto mb-4"></i>
+                        <h3 class="text-2xl font-bold text-zinc-100">Hoje é dia de descanso!</h3>
+                        <p class="text-zinc-400 mt-2">Aproveite para recarregar as energias para a próxima semana.</p>
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+            updateProgressBar();
+        });
+    </script>
+</body>
+</html>
